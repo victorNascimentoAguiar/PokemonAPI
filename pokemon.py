@@ -3,13 +3,38 @@ import requests
 from deep_translator import GoogleTranslator
 #https://pokeapi.co/api/v2/pokemon-species/{id or name}/
 
+def get_type_weaknesses(types):
+    weaknesses = []
+    resistances  = []
+    immunities = []
 
-#definindo a funcao da API
-def pokemon_name(endpoint, identifier=""):
-    url = f"https://pokeapi.co/api/v2/{endpoint}/{identifier}"
-    response = requests.get(url, params=identifier)
-    return response.json() if  response.status_code == 200 else None
+    for t in types :
+        url = f"https://pokeapi.co/api/v2/type/{t}"
+        res = requests.get(url)
+        if res.status_code !=200:
+            continue
+        type_data = res.json()
 
+        #add fraqueza
+        for w in type_data["damage_relations"]["double_damage_from"]:
+            weaknesses.append(w["name"])
+        #add resistencia
+        for r in type_data["damage_relations"]["half_damage_from"]:
+            resistances.append(r["name"])
+        #add imunidade
+        for i in type_data["damage_relations"]["no_damage_from"]:
+            immunities.append(i["name"])
+            
+    #remover duplicidades
+    weaknesses = list(set(weaknesses))
+    resistances = list(set(resistances))
+    immunities = list(set(immunities))
+
+    return {
+        "weaknesses" : weaknesses,
+        "resistances" : resistances,
+        "immunities" : immunities
+    }
 
 def pokemon_Dex(name_or_id):
     #busca os dados do pokemon
@@ -23,7 +48,7 @@ def pokemon_Dex(name_or_id):
     name = species_data["name"]
     id_ = species_data["id"]
 
-
+    #traduz para portuques a descricao do pokemon
     description = None
     for entry in species_data["flavor_text_entries"]:
         if entry["language"]["name"] == "en":
@@ -31,6 +56,23 @@ def pokemon_Dex(name_or_id):
             break
     if description:
         description = GoogleTranslator(source="en", target="pt").translate(description)
+    # pokemon data (tipos, stats, entre outras coisas)
+    pokemon_url = f"https://pokeapi.co/api/v2/pokemon/{name_or_id}"
+    pokemon_res = requests.get(pokemon_url)
+    pokemon_data = pokemon_res.json() if pokemon_res. status_code == 200 else {}
+
+
+    #buscando o tipo do pokemon 
+    types = [t["type"]["name"] for t in pokemon_data["types"]]
+    #busca a fraquesa,forca e imunidade dos pokemons
+    damage_relations = get_type_weaknesses(types)
+    
+
+
+
+
+
+    
 
     #busca cadeia evolutiva
     evo_chain_url = species_data["evolution_chain"]["url"]
@@ -39,6 +81,8 @@ def pokemon_Dex(name_or_id):
         evolution = []
     else:
         evo_data = evo_res.json()["chain"]
+
+
     # funcao recursiva para buscar evolucoes
         evolutions = []
         #definindo uma funcao que busca a cadeia evolutiva do pokemon como por exemplo charmander > charmeleon > chalizard
@@ -72,7 +116,7 @@ def pokemon_Dex(name_or_id):
             return current
 
             
-            
+        
         # inicia a extração
         extract_chain(evo_data)
  
@@ -85,8 +129,17 @@ def pokemon_Dex(name_or_id):
     "name": name,
     "id" : id_,
     "description" : description,
+    "types" : types,
+    "damage_relations": damage_relations,
     "evolution_chain": extract_chain(evo_data)
     }
+
+def print_tipo_fraquesa_resistancia_imunidade(pokemon):
+    print("Tipos:", ", ".join(pokemon["types"]))
+    print("Fraquezas:", ", ".join(pokemon["damage_relations"]["weaknesses"]))
+    print("Resistências:", ", ".join(pokemon["damage_relations"]["resistances"]))
+    print("Imunidades:", ", ".join(pokemon["damage_relations"]["immunities"]))
+
 
 
 #esta melhorando a forma que o a cadeia evolutiva e exibida para evitar confusoes 
@@ -105,6 +158,7 @@ def print_cadeia_evolutiva(chain, indent=0):
 
 #input do usuario 
 #usuario vai escolher qual pokemon ele quer procurar
+
 pokemon_usuario = input("digite o nome ou  numero na dex do pokemon:  ").lower()
 pokemon= pokemon_Dex(pokemon_usuario)
 
@@ -115,6 +169,8 @@ if pokemon:
     print("Cadeia evolutiva: ")
     print_cadeia_evolutiva(pokemon["evolution_chain"])
     print("descricao:", pokemon["description"])
+    print_tipo_fraquesa_resistancia_imunidade(pokemon)
+    
 #caso nao encontre o pokemon ele retorna um aviso falando que o pokemon nao foi encontrado
 else:
     print("pokemon nao localizado")
@@ -133,7 +189,16 @@ else:
 #antiga funcao para buscar pokemons porem muito bruta nao serve para oque etou fazendo agora;
 #Porem gostaria de quardar para estudos futuros. 
 #descartada por trazer todos os dados de uma vez tornando inefiiente 
+
+
+
 """   
+
+#definindo a funcao da API
+#def pokemon_name(endpoint, identifier=""):
+    #url = f"https://pokeapi.co/api/v2/{endpoint}/{identifier}"
+    #response = requests.get(url, params=identifier)
+    #return response.json() if  response.status_code == 200 else None
 ## utilizando o def para buscar os dados da API
 pokemonSpecies = pokemon_name("pokemon-species/","600") 
 ##Pede ao usuario para escolher ou nome do pokemon ou ID(Numero na pokedex)
